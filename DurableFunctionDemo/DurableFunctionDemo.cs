@@ -3,6 +3,7 @@ using Microsoft.Azure.WebJobs.Extensions.DurableTask;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -52,25 +53,12 @@ namespace DurableFunctionDemo
         }
 
         [FunctionName("TriggerFxn_TimerTriggerStart")]
-        public static async Task<HttpResponseMessage> TimerStart([TimerTrigger("0 0 22 28 - 31 * *")] HttpRequestMessage req, [DurableClient] IDurableOrchestrationClient starter, ILogger log)
+        public static async Task TimerStart([TimerTrigger("0 0 22 28-31 * *")] TimerInfo timer, [DurableClient] IDurableOrchestrationClient starter, ILogger log)
         {
-            string instanceId = null;
+            string instanceId = new Guid().ToString("N");
 
-            var content = await req.Content.ReadAsStringAsync();
-            var data = JsonConvert.DeserializeObject<List<string>>(content);
-            foreach (var item in data)
-            {
-                // Function input comes from the request content.
-                instanceId = await starter.StartNewAsync("OrchestrationFxn", new Data
-                {
-                    Name = item
-                });
-                log.LogInformation($"Started orchestration for item:{item} with ID = '{instanceId}'.");
+            await starter.StartNewAsync("OrchestrationFxn", instanceId);
 
-            }
-
-            // Not necessarily what needs to be returned here
-            return starter.CreateCheckStatusResponse(req, instanceId);
         }
 
         public class Data
