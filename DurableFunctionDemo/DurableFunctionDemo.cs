@@ -10,31 +10,45 @@ using System.Threading.Tasks;
 
 namespace DurableFunctionDemo
 {
-    public static class DurableFunctionDemo
+    public class DurableFunctionDemo
     {
         [FunctionName("OrchestrationFxn")]
-        public static async Task<string> RunOrchestrator([OrchestrationTrigger] IDurableOrchestrationContext context)
+        public async Task<string> RunOrchestrator([OrchestrationTrigger] IDurableOrchestrationContext context, ILogger log)
         {
-            var name = context.GetInput<Data>()?.Name;
-            await context.CallActivityAsync("ActivityFxn", name);
+            var requestData = context.GetInput<Data>();
+            var response = await context.CallActivityAsync<bool>("ActivityFxn", requestData);
+
+            // While the activity returns a true value, re-trigger the activity function
+            while(response)
+            {
+                response = await context.CallActivityAsync<bool>("ActivityFxn", requestData);
+            }
+           
             // Not necessarily what needs to be returned here
             return "Completed";
         }
 
         [FunctionName("ActivityFxn")]
-        public static string DoWork([ActivityTrigger] IDurableActivityContext context, ILogger log)
+        public bool DoWork([ActivityTrigger] IDurableActivityContext context, ILogger log)
         {
-            var data = context.GetInput<string>();
+            var name = context.GetInput<Data>()?.Name;
+            var startDate = context.GetInput<Data>().startDate.ToString();
+            var endDate = context.GetInput<Data>().endDate.ToString();
+
             for (var i = 0; i < 4; i++)
             {
-                log.LogInformation($"Activity started for Item:{data} and iteration : {i}");
+                log.LogInformation($"Activity started for Item:{name} : Start Date : {startDate} : End Date : {endDate} and iteration : {i}");
             }
-            // Not necessarily what needs to be returned here
-            return $"Activity Processed for {data}!";
+
+            // Create random boolean return value
+            Random rnd = new Random();
+            var rtn = rnd.NextDouble() > 0.5;
+
+           return rtn;
         }
 
         [FunctionName("TriggerFxn_HttpStart")]
-        public static async Task<HttpResponseMessage> HttpStart([HttpTrigger(AuthorizationLevel.Anonymous, "get")] HttpRequestMessage req, [DurableClient] IDurableOrchestrationClient starter, ILogger log)
+        public async Task<HttpResponseMessage> HttpStart([HttpTrigger(AuthorizationLevel.Anonymous, "get")] HttpRequestMessage req, [DurableClient] IDurableOrchestrationClient starter, ILogger log)
         {
             string instanceId = null;
 
@@ -53,17 +67,28 @@ namespace DurableFunctionDemo
         }
 
         [FunctionName("TriggerFxn_TimerTriggerStart")]
-        public static async Task TimerStart([TimerTrigger("0 0 22 28-31 * *")] TimerInfo timer, [DurableClient] IDurableOrchestrationClient starter, ILogger log)
+        public static async Task TimerStart([TimerTrigger("* * * * *")] TimerInfo timer, [DurableClient] IDurableOrchestrationClient starter, ILogger log)
         {
-            string instanceId = new Guid().ToString("N");
+            var requestData = new Data { Name = "Test Data Name" };
 
-            await starter.StartNewAsync("OrchestrationFxn", instanceId);
+            await starter.StartNewAsync("OrchestrationFxn", requestData);
 
         }
 
         public class Data
         {
             public string Name { get; set; }
+            public DateTime startDate
+            {
+                // Calculate the first day of the previous month
+                get { return new DateTime(DateTime.Now.Year, DateTime.Now.AddMonths(-1).Month, 1).Date; }
+            }
+            public DateTime endDate
+            {
+                // Cal
+                get { return new DateTime(DateTime.Now.Year, DateTime.Now.AddMonths(-1).Month, new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1).AddDays(-1).Day).Date; }
+            }
+
         }
 
     }
