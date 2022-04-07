@@ -85,7 +85,7 @@ namespace DurableFunctionDemo
             }
             public DateTime endDate
             {
-                // Cal
+                // Calculate the last day of the previous month
                 get { return new DateTime(DateTime.Now.Year, DateTime.Now.AddMonths(-1).Month, new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1).AddDays(-1).Day).Date; }
             }
 
